@@ -77,7 +77,7 @@
   (let* ((padding (janet-nrepl/padding (length msg))))
     ;;(unless (string-suffix-p "\n" msg)
     ;;  (setq msg (format "%s\n" msg)))
-    (format "%s%s" padding msg)))
+    (format "%s%s" padding (string-as-unibyte msg))))
 
 (defun janet-nrepl/send-string (process msg &optional without-prefix?)
   "Send MSG to janet netrepl via PROCESS."

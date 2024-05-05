@@ -74,10 +74,11 @@
   WITHOUT-PREFIX? controls if \xFF is prepended to the message."
   (unless without-prefix?
     (setq msg (format "%s" msg)))
+  (setq msg (string-as-unibyte msg))
   (let* ((padding (janet-nrepl/padding (length msg))))
     ;;(unless (string-suffix-p "\n" msg)
     ;;  (setq msg (format "%s\n" msg)))
-    (format "%s%s" padding (string-as-unibyte msg))))
+    (format "%s%s" padding msg)))
 
 (defun janet-nrepl/send-string (process msg &optional without-prefix?)
   "Send MSG to janet netrepl via PROCESS."
@@ -180,8 +181,9 @@
     (setq *janet-nrepl/repl-name* nil
 	  *janet-nrepl/response-history* nil
 	  *janet-nrepl/latest-response* nil)
-    (kill-buffer (process-buffer *janet-nrepl/process*))
-    (delete-process *janet-nrepl/process*)
+    (let ((buffer (process-buffer *janet-nrepl/process*)))
+      (delete-process *janet-nrepl/process*)
+      (kill-buffer buffer))
     (setq *janet-nrepl/process* nil)
     (message "Connection to janet process closed")))
 

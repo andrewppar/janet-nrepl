@@ -2,7 +2,7 @@
 
 ;; Author: andrewppar
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "26.2"))
+;; Package-Requires: ((emacs "26.2") (eros "0.1.0"))
 ;; Keywords: janet repl
 
 ;; This file is not part of GNU Emacs.
@@ -11,6 +11,16 @@
 ;; A Janet NREPL Client For Emacs
 
 ;;; Code:
+
+;;;;;;;;;;;;;;;;;
+;;; Eros Overlay
+(require 'eros)
+
+(defun eros-overlay-result (value)
+  "Create eros overlay for VALUE."
+  (eros--make-result-overlay (format "%s" value)
+    :where (save-excursion (end-of-defun) (point))
+    :duration eros-eval-result-duration))
 
 ;;;;;;;;;;;;
 ;;; Messages
@@ -141,27 +151,17 @@
 	      (insert (format "%s\n" stdout))
 	    (insert "\n"))
 	  (insert (format "[%s] %s > " iteration prompt)))))))
-;;	(if *janet-nrepl/repl-name*
-;;	    (progn
-;;
-;;
-;;	(let ((message (substring msg 9)))
-;;	  (setq the-message msg)
-;;	  (save-window-excursion
-;;  	    (switch-to-buffer buffer)
-;;  	    (kill-region (point-min) (point-max))
-;;  	    (goto-char (point-max))
-;;  	    (insert (format "%s\n" message)))
-;;	  (setq *janet-nrepl/repl-name* message))))))
 
-(defun janet-nrepl/connect (host port)
-  "Connect to a running janet netrepl on HOST and PORT."
+(defun janet-nrepl/connect (host port name)
+  "Connect to a running janet netrepl on HOST and PORT with NAME."
   (let* ((buffer (get-buffer-create "*janet-repl*"))
-	 (stream (open-network-stream "gabriel" buffer host port)))
+	 (stream (open-network-stream name buffer host port)))
     (set-process-filter stream 'janet-repl/filter)
     (set-process-buffer stream buffer)
     (setq *janet-nrepl/process* stream)
-    (janet-nrepl/send-string stream "\xFF{:auto-flush true :name \"arch-gabriel\"}")))
+    (janet-nrepl/send-string
+     stream
+     (format "\xFF{:auto-flush true :name \"%s\"}" name))))
 
 (defun janet-nrepl/send (msg)
   "Send MSG to connected janet nrepl."
@@ -211,13 +211,14 @@
 	   (result (janet-nrepl/send form t)))
       (eros-overlay-result result))))
 
-(defun janet-nrepl/prompt-connect (host port)
-  "Prompt user for HOST and PORT to connect to a janet netrepl."
+(defun janet-nrepl/prompt-connect (host port name)
+  "Prompt user for HOST, PORT, and NAME to connect to a janet netrepl."
   (interactive
    (list
     (read-string "host: " "localhost")
-    (read-string "port: " "9365")))
-  (janet-nrepl/connect host port))
+    (read-string "port: " "9365")
+    (read-string "name: " "gabriel")))
+  (janet-nrepl/connect host port name))
 
 (provide 'janet-nrepl)
 ;;; janet-nrepl.el ends here

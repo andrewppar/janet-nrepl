@@ -160,7 +160,7 @@
               :result (janet-nrepl--clean-string eval-result)
               :stdout (janet-nrepl--clean-string stdout))))))
 
-defun janet-repl/filter (process msg)
+(defun janet-repl/filter (process msg)
   "Filter for janet nrepl for PROCESS with MSG."
   (setq *janet-nrepl/filter-ran?* t)
   (when msg

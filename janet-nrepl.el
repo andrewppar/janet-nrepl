@@ -26,6 +26,7 @@
 ;;; Client
 
 (require 'janet-nrepl-message)
+(require 'janet-nrepl-response)
 
 (defvar *janet-nrepl/process* nil)
 (defvar *janet-nrepl/repl-name* nil)

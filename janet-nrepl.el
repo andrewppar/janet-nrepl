@@ -40,8 +40,7 @@
 
 (defun janet-nrepl/send-string (process msg &optional without-prefix?)
   "Send MSG to janet netrepl via PROCESS."
-  (thread-last msg
-               string-as-unibyte
+  (thread-last (encode-coding-string msg 'utf-8-unix)
                janet-nrepl-message/pack
                (process-send-string process)))
 

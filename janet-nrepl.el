@@ -2,7 +2,7 @@
 
 ;; Author: andrewppar
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "26.2") (eros "0.1.0"))
+;; Package-Requires: ((emacs "26.2"))
 ;; Keywords: janet repl
 
 ;; This file is not part of GNU Emacs.
@@ -12,27 +12,19 @@
 
 ;;; Code:
 
-;;;;;;;;;;;;;;;;;
-;;; Eros Overlay
-(require 'eros)
-
-(defun eros-overlay-result (value)
-  "Create eros overlay for VALUE."
-  (eros--make-result-overlay (format "%s" value)
-    :where (save-excursion (end-of-defun) (point))
-    :duration eros-eval-result-duration))
-
 ;;;;;;;;;;
 ;;; Client
 
 (require 'janet-nrepl-message)
 (require 'janet-nrepl-response)
+(require 'janet-nrepl-result)
 
 (defvar *janet-nrepl/process* nil)
 (defvar *janet-nrepl/repl-name* nil)
 (defvar *janet-nrepl/latest-response* nil)
 (defvar *janet-nrepl/last-message* "")
 (defvar *janet-nrepl/response-history* nil)
+(defvar *janet-nrepl/janet-builtins* nil)
 
 (defun janet-nrepl--history-length ()
   "Return the length of nrepls current response history."
@@ -62,6 +54,36 @@
 	(setq *janet-nrepl/repl-name* repl-name
 	      *janet-nrepl/latest-response* response)))))
 
+(defun janet-nrepl/get-builtins ()
+  "Transform janet's builtin function docs to elisp."
+  (let* ((doc-string (thread-last
+		       "(do
+                         (var result \"(\")
+                         (eachk function-sym root-env
+                          (set result
+                           (string/format \"%s %s\" result function-sym)))
+                         (string/format \"%s)\" result))"
+		       janet-nrepl/send
+		       strip-ansi-chars
+		       (string-replace "\\n" "\n")
+		       (string-replace "\\" ""))))
+
+    (setq *janet-nrepl/janet-builtins*
+	  (thread-last
+	    (substring doc-string 1)
+	    read-from-string
+	    car
+	    (mapcar (lambda (fn) (format "%s" fn)))))))
+
+(defun janet-nrepl/get-doc (symbol-string)
+  "Get the documentation for SYMBOL-STRING."
+  (thread-last
+    symbol-string
+    (format "(doc %s)")
+    janet-nrepl/send
+    strip-ansi-chars
+    (replace-regexp-in-string "^nil" "")))
+
 (defun janet-nrepl/connect (host port name)
   "Connect to a running janet netrepl on HOST and PORT with NAME."
   (let* ((buffer (get-buffer-create "*janet-repl*"))
@@ -79,6 +101,8 @@
       (switch-to-buffer buffer)
       (goto-char (point-max))
       (insert (plist-get *janet-nrepl/latest-response* :repl-prompt)))
+    (setq *janet-nrepl/latest-response* nil)
+    (janet-nrepl/get-builtins)
     (setq *janet-nrepl/latest-response* nil)))
 
 (defun janet-nrepl/send (msg)
@@ -125,18 +149,11 @@
 		  string-trim
 		  eros-overlay-result)))
 
-(defun janet-send-defun-at-point ()
-  "Eval sexpression at point."
-  (interactive)
-  (let (start end)
-    (save-excursion
-      (end-of-defun)
-      (setq end (point))
-      (beginning-of-defun)
-      (setq start (point)))
-    (let* ((form (buffer-substring start end))
-           (result (string-as-multibyte (janet-nrepl/send form))))
-      (eros-overlay-result result))))
+(defun strip-ansi-chars (str)
+  "Remove ANSI characters from STR."
+  (let ((clean-str (ansi-color-apply str)))
+    (set-text-properties 0 (length clean-str) nil clean-str)
+    clean-str))
 
 (defun janet-nrepl/prompt-connect (host port name)
   "Prompt user for HOST, PORT, and NAME to connect to a janet netrepl."
@@ -146,6 +163,41 @@
     (read-string "port: " "9365")
     (read-string "name: " "gabriel")))
   (janet-nrepl/connect host port name))
+
+(defun janet-eval-defun-to-comment ()
+  "Eval sexpression at point to comment."
+  (interactive)
+  (let (start end)
+    (save-excursion
+      (end-of-defun)
+      (setq end (point))
+      (beginning-of-defun)
+      (setq start (point)))
+    (let ((result (thread-first
+		    (buffer-substring start end)
+		    janet-nrepl/send
+		    string-as-multibyte
+		    strip-ansi-chars
+		    string-trim)))
+      (save-excursion
+	(goto-char end)
+	(insert
+	 (string-join
+	  (mapcar
+	   (lambda (line) (format "# %s" line))
+	   (split-string result "\n"))
+	  "\n"))))))
+
+(defun janet-nrepl/docs-at-point ()
+  "Get documentation for item at point."
+  (interactive)
+  (let ((word (current-word))
+	(window (split-window)))
+    (select-window window)
+    (switch-to-buffer *janet-nrepl/result-buffer*)
+    (janet-nrepl/with-clean-result-buffer
+     (insert (janet-nrepl/get-doc word)))))
+
 
 (provide 'janet-nrepl)
 ;;; janet-nrepl.el ends here
